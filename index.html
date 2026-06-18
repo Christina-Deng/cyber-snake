@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CYBER SNAKE // 赛博贪吃蛇</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="scanlines"></div>
+  <div class="vignette"></div>
+  <div class="grid-bg"></div>
+
+  <div class="container">
+    <header class="header">
+      <div class="logo">
+        <span class="logo-bracket">[</span>
+        <h1>CYBER<span class="accent">SNAKE</span></h1>
+        <span class="logo-bracket">]</span>
+      </div>
+      <p class="subtitle">NEURAL LINK // v2.0.77</p>
+    </header>
+
+    <div class="hud">
+      <div class="hud-panel">
+        <span class="hud-label">SCORE</span>
+        <span class="hud-value" id="score">0000</span>
+      </div>
+      <div class="hud-panel">
+        <span class="hud-label">HIGH</span>
+        <span class="hud-value" id="highScore">0000</span>
+      </div>
+      <div class="hud-panel">
+        <span class="hud-label">SPEED</span>
+        <span class="hud-value" id="speed">1.0x</span>
+      </div>
+    </div>
+
+    <div class="game-wrapper">
+      <canvas id="gameCanvas" width="600" height="600"></canvas>
+      <div class="corner corner-tl"></div>
+      <div class="corner corner-tr"></div>
+      <div class="corner corner-bl"></div>
+      <div class="corner corner-br"></div>
+
+      <div class="overlay" id="startOverlay">
+        <div class="overlay-content">
+          <div class="pulse-ring"></div>
+          <h2>INITIALIZE</h2>
+          <p>按 <kbd>SPACE</kbd> 或点击开始</p>
+          <div class="controls-hint">
+            <span><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> 移动</span>
+            <span><kbd>P</kbd> 暂停</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="overlay hidden" id="pauseOverlay">
+        <div class="overlay-content">
+          <h2>PAUSED</h2>
+          <p>按 <kbd>P</kbd> 继续</p>
+        </div>
+      </div>
+
+      <div class="overlay hidden" id="gameOverOverlay">
+        <div class="overlay-content game-over">
+          <h2>SYSTEM FAILURE</h2>
+          <p class="final-score">FINAL SCORE: <span id="finalScore">0</span></p>
+          <p>按 <kbd>SPACE</kbd> 重启</p>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <span class="blink">●</span> NEURAL INTERFACE ACTIVE
+    </footer>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
