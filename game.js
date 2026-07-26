@@ -13,12 +13,26 @@ const startOverlay = document.getElementById('startOverlay');
 const pauseOverlay = document.getElementById('pauseOverlay');
 const gameOverOverlay = document.getElementById('gameOverOverlay');
 
+const EAT_PALETTES = [
+  [0, 240, 255],
+  [255, 0, 170],
+  [0, 255, 136],
+  [123, 47, 255],
+  [255, 200, 0],
+];
+
 let snake, direction, nextDirection, food, score, highScore, gameLoop, state;
 let baseSpeed = 120;
-let particles = [];
+let eatAnimEnd = 0;
+let eatAnimStart = 0;
+let eatPaletteIndex = 0;
 
 highScore = parseInt(localStorage.getItem('cyberSnakeHigh') || '0', 10);
 highScoreEl.textContent = String(highScore).padStart(4, '0');
+
+function wrapCoord(value, max) {
+  return ((value % max) + max) % max;
+}
 
 function init() {
   const mid = Math.floor(COLS / 2);
@@ -30,7 +44,8 @@ function init() {
   direction = { x: 1, y: 0 };
   nextDirection = { x: 1, y: 0 };
   score = 0;
-  particles = [];
+  eatAnimEnd = 0;
+  eatAnimStart = 0;
   scoreEl.textContent = '0000';
   speedEl.textContent = '1.0x';
   baseSpeed = 120;
@@ -38,48 +53,59 @@ function init() {
 }
 
 function spawnFood() {
-  do {
-    food = {
-      x: Math.floor(Math.random() * COLS),
-      y: Math.floor(Math.random() * ROWS),
-    };
-  } while (snake.some(s => s.x === food.x && s.y === food.y));
-}
-
-function spawnParticles(x, y) {
-  const colors = ['#00f0ff', '#ff00aa', '#7b2fff', '#00ff88'];
-  for (let i = 0; i < 12; i++) {
-    const angle = (Math.PI * 2 * i) / 12;
-    particles.push({
-      x: x * GRID + GRID / 2,
-      y: y * GRID + GRID / 2,
-      vx: Math.cos(angle) * (2 + Math.random() * 3),
-      vy: Math.sin(angle) * (2 + Math.random() * 3),
-      life: 1,
-      color: colors[Math.floor(Math.random() * colors.length)],
-    });
+  const empty = [];
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (!snake.some(s => s.x === x && s.y === y)) {
+        empty.push({ x, y });
+      }
+    }
   }
+  if (empty.length === 0) {
+    food = null;
+    return;
+  }
+  food = empty[Math.floor(Math.random() * empty.length)];
 }
 
-function updateParticles() {
-  particles = particles.filter(p => {
-    p.x += p.vx;
-    p.y += p.vy;
-    p.life -= 0.03;
-    return p.life > 0;
-  });
+function triggerEatAnimation() {
+  eatPaletteIndex = (eatPaletteIndex + 1) % EAT_PALETTES.length;
+  eatAnimStart = Date.now();
+  eatAnimEnd = eatAnimStart + 600;
 }
 
-function drawParticles() {
-  particles.forEach(p => {
-    ctx.globalAlpha = p.life;
-    ctx.fillStyle = p.color;
-    ctx.shadowColor = p.color;
-    ctx.shadowBlur = 8;
-    ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
-  });
-  ctx.globalAlpha = 1;
-  ctx.shadowBlur = 0;
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function getEatAnimMix() {
+  if (Date.now() >= eatAnimEnd) return 0;
+  const elapsed = Date.now() - eatAnimStart;
+  const t = elapsed / (eatAnimEnd - eatAnimStart);
+  return Math.sin(t * Math.PI);
+}
+
+function getAnimatedColor(baseR, baseG, baseB, segIndex) {
+  const mix = getEatAnimMix();
+  if (mix <= 0) return { r: baseR, g: baseG, b: baseB };
+
+  const elapsed = Date.now() - eatAnimStart;
+  const cycle = (elapsed / 120 + segIndex * 0.15) % EAT_PALETTES.length;
+  const idx = Math.floor(cycle);
+  const next = (idx + 1) % EAT_PALETTES.length;
+  const localT = cycle - idx;
+  const [r1, g1, b1] = EAT_PALETTES[(idx + eatPaletteIndex) % EAT_PALETTES.length];
+  const [r2, g2, b2] = EAT_PALETTES[(next + eatPaletteIndex) % EAT_PALETTES.length];
+  const flashR = lerp(r1, r2, localT);
+  const flashG = lerp(g1, g2, localT);
+  const flashB = lerp(b1, b2, localT);
+
+  const wave = mix * (0.7 + 0.3 * Math.sin(elapsed / 40 + segIndex * 0.5));
+  return {
+    r: Math.round(lerp(baseR, flashR, wave)),
+    g: Math.round(lerp(baseG, flashG, wave)),
+    b: Math.round(lerp(baseB, flashB, wave)),
+  };
 }
 
 function drawGrid() {
@@ -100,6 +126,8 @@ function drawGrid() {
 }
 
 function drawFood() {
+  if (!food) return;
+
   const cx = food.x * GRID + GRID / 2;
   const cy = food.y * GRID + GRID / 2;
   const pulse = Math.sin(Date.now() / 200) * 0.15 + 0.85;
@@ -127,23 +155,26 @@ function drawFood() {
 function drawSnake() {
   snake.forEach((seg, i) => {
     const t = i / Math.max(snake.length - 1, 1);
-    const r = Math.round(0 + t * 0);
-    const g = Math.round(240 - t * 80);
-    const b = Math.round(255 - t * 167);
+    const baseR = i === 0 ? 0 : 0;
+    const baseG = i === 0 ? 240 : Math.round(240 - t * 80);
+    const baseB = i === 0 ? 255 : Math.round(255 - t * 167);
+    const { r, g, b } = getAnimatedColor(baseR, baseG, baseB, i);
     const color = `rgb(${r}, ${g}, ${b})`;
 
     ctx.save();
     ctx.shadowColor = color;
-    ctx.shadowBlur = i === 0 ? 12 : 6;
+    ctx.shadowBlur = i === 0 ? 12 + getEatAnimMix() * 8 : 6 + getEatAnimMix() * 4;
 
     const pad = i === 0 ? 1 : 2;
     const size = GRID - pad * 2;
     const x = seg.x * GRID + pad;
     const y = seg.y * GRID + pad;
 
+    ctx.fillStyle = color;
+    ctx.globalAlpha = i === 0 ? 1 : 1 - t * 0.4;
+    ctx.fillRect(x, y, size, size);
+
     if (i === 0) {
-      ctx.fillStyle = '#00f0ff';
-      ctx.fillRect(x, y, size, size);
       ctx.fillStyle = '#0a0a12';
       const eyeOffset = 5;
       if (direction.x === 1) {
@@ -159,10 +190,6 @@ function drawSnake() {
         ctx.fillRect(x + 4, y + size - eyeOffset, 3, 3);
         ctx.fillRect(x + size - 7, y + size - eyeOffset, 3, 3);
       }
-    } else {
-      ctx.fillStyle = color;
-      ctx.globalAlpha = 1 - t * 0.4;
-      ctx.fillRect(x, y, size, size);
     }
     ctx.restore();
   });
@@ -174,33 +201,46 @@ function draw() {
 
   drawGrid();
   drawFood();
-  drawSnake();
-  updateParticles();
-  drawParticles();
+  if (snake) drawSnake();
+}
+
+function renderLoop() {
+  draw();
+  requestAnimationFrame(renderLoop);
+}
+
+function hitsSelf(head, willEat) {
+  for (let i = 0; i < snake.length; i++) {
+    const seg = snake[i];
+    if (seg.x !== head.x || seg.y !== head.y) continue;
+    if (i === snake.length - 1 && !willEat) continue;
+    return true;
+  }
+  return false;
 }
 
 function tick() {
   direction = nextDirection;
 
   const head = {
-    x: snake[0].x + direction.x,
-    y: snake[0].y + direction.y,
+    x: wrapCoord(snake[0].x + direction.x, COLS),
+    y: wrapCoord(snake[0].y + direction.y, ROWS),
   };
 
-  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
-    return gameOver();
-  }
-  if (snake.some(s => s.x === head.x && s.y === head.y)) {
+  const willEat = food && head.x === food.x && head.y === food.y;
+
+  if (hitsSelf(head, willEat)) {
     return gameOver();
   }
 
   snake.unshift(head);
 
-  if (head.x === food.x && head.y === food.y) {
+  if (willEat) {
     score += 10;
     scoreEl.textContent = String(score).padStart(4, '0');
-    spawnParticles(food.x, food.y);
+    triggerEatAnimation();
     spawnFood();
+    if (!food) return winGame();
     baseSpeed = Math.max(60, baseSpeed - 3);
     const mult = (120 / baseSpeed).toFixed(1);
     speedEl.textContent = `${mult}x`;
@@ -209,17 +249,28 @@ function tick() {
   } else {
     snake.pop();
   }
+}
 
-  draw();
+function winGame() {
+  state = 'gameover';
+  clearInterval(gameLoop);
+  if (score > highScore) {
+    highScore = score;
+    localStorage.setItem('cyberSnakeHigh', String(highScore));
+    highScoreEl.textContent = String(highScore).padStart(4, '0');
+  }
+  finalScoreEl.textContent = score;
+  gameOverOverlay.querySelector('h2').textContent = 'SYSTEM COMPLETE';
+  gameOverOverlay.classList.remove('hidden');
 }
 
 function startGame() {
   init();
   state = 'playing';
+  gameOverOverlay.querySelector('h2').textContent = 'SYSTEM FAILURE';
   startOverlay.classList.add('hidden');
   gameOverOverlay.classList.add('hidden');
   pauseOverlay.classList.add('hidden');
-  draw();
   clearInterval(gameLoop);
   gameLoop = setInterval(tick, baseSpeed);
 }
@@ -287,4 +338,4 @@ startOverlay.addEventListener('click', e => {
 });
 
 state = 'idle';
-draw();
+requestAnimationFrame(renderLoop);
